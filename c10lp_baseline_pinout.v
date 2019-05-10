@@ -120,29 +120,30 @@ module c10lp_baseline_pinout (
 
 );
 
-wire [31 : 0] test_ed;
+wire signed [67 : 0] test_ed;
 wire [31:0] test_per;
 wire [3:0] debug;
 wire pc;
 
+wire [7:0] wvfm;
+
 ////////////////////Instantiation of the hardware description for pulse generator////////////
-main main0 (
+PulseGen_main main0 (
 	.sys_clk(HBUS_CLK_50M),
-	.btg_enable(GPIO[33]),
 	.rx(GPIO[35]),
 	.tx(GPIO[34]),
 	.pulse_base_clk(ENET_CLK_125M),
 	.trig(GPIO[10]),
-	.wvfm(GPIO[7:0]),
+	.wvfm(wvfm),
 	.test_ed(test_ed),
 	.test_per(test_per),
 	.pulse_clk_out(pc),
 	.debug(debug)
 	);
 
-reg [31:0] n;
+reg signed [31:0] n;
 
-always @(posedge HBUS_CLK_50M) begin
+always @(posedge pc) begin
 	if (n <= test_per) begin
 		n <= n + 1'b1;
 	end 
@@ -151,9 +152,15 @@ always @(posedge HBUS_CLK_50M) begin
 	end
 end
 
-assign USER_LED[0] = (n <= test_ed);
-assign USER_LED[1] = debug[1];
-assign USER_LED[3:2] = debug[3:2];
+//assign USER_LED[3:0] = wv[3:0];
+assign GPIO[7:0] = wvfm[7:0];
+
+//assign USER_LED[0] = (n <= test_ed[31:0]);
+//assign USER_LED[2:1] = test_ed[66:65];
+//assign USER_LED[3] = test_ed[67];
+assign USER_LED[3:0] = ~wvfm[3:0];
+//assign USER_LED[1] = debug[1];
+//assign USER_LED[3:2] = debug[3:2];
 //assign USER_LED[2] = (test_per == 0);
 
 endmodule
