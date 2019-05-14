@@ -27,13 +27,13 @@ module PulseGen_main (
 //////////////////////Clock Generation/////////////////////////////////////
 wire pulse_clk;
 wire PLL_locked;
-PLL PLL1G (.inclk0(pulse_base_clk), .c0(pulse_clk), .locked(PLL_locked)); //Produces 1GHz clk from 125M clk
-assign pulse_clk_out = sys_clk;
+PLL400M_50M PLL400M_50M_0 (.inclk0(pulse_base_clk), .c0(pulse_clk), .locked(PLL_locked)); //Produces 400MHz clk from 50MHz base
+assign pulse_clk_out = pulse_clk;
 
 //////////////////////Logic Module Instantiation////////////////////////////
 // Hard-coded limitations (number of edges, bits per edge, maximum count bits)
 parameter CH_LOG2 = 3;
-parameter ED_MAX = 10;
+parameter ED_MAX = 64;
 parameter COUNT_BITS = 32; //longest period is set by number of bits
 parameter ED_BITS = COUNT_BITS + COUNT_BITS + CH_LOG2 + 1;
 localparam CH_MAX = 8'b0000_0001 << CH_LOG2;
@@ -54,7 +54,7 @@ endgenerate
 
 pulse_logic #(.COUNT_BITS(COUNT_BITS), .CH_LOG2(CH_LOG2), .ED_MAX(ED_MAX)) pulse_logic0 (
 	.reset(reset), // trig | (~PLL_locked)
-	.clk(sys_clk), //pulse_clk
+	.clk(pulse_clk), //pulse_clk
 	.period(period),
 	.outer_period(outer_period),
 	.state0(state0),
@@ -72,6 +72,7 @@ wire received;
 wire [7:0] rx_byte;
 wire is_transmitting;
 wire recv_error;
+wire is_receiving;
 
 uart u0 (
     .clk(sys_clk), // The master clock for this module
@@ -163,6 +164,7 @@ always @(posedge sys_clk) begin
 	
 end
 
+assign debug[0] = is_receiving;
 assign debug[1] = ~execute;
 assign debug[2] = (mem[0] == PER);
 assign debug[3] = (mem[0] == ED);
