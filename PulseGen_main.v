@@ -13,7 +13,7 @@ module PulseGen_main (
 	input pulse_base_clk,
 	
 	// User electrical IO
-	input trig,
+	input trig_in,
 	output [CH_MAX - 1 : 0] wvfm,
 	
 	output reg [67:0] test_ed,
@@ -27,20 +27,22 @@ module PulseGen_main (
 //////////////////////Clock Generation/////////////////////////////////////
 wire pulse_clk;
 wire PLL_locked;
-PLL400M_50M PLL400M_50M_0 (.inclk0(pulse_base_clk), .c0(pulse_clk), .locked(PLL_locked)); //Produces 400MHz clk from 50MHz base
+assign pulse_clk = pulse_base_clk;
+//PLL250M_125M PLL250M_125M_0 (.inclk0(pulse_base_clk), .c0(pulse_clk), .locked(PLL_locked)); //Produces 250MHz clk from 125MHz base
+//PLL400M_50M PLL400M_50M_0 (.inclk0(pulse_base_clk), .c0(pulse_clk), .locked(PLL_locked)); //Produces 400MHz clk from 50MHz base
 assign pulse_clk_out = pulse_clk;
 
 //////////////////////Logic Module Instantiation////////////////////////////
 // Hard-coded limitations (number of edges, bits per edge, maximum count bits)
 parameter CH_LOG2 = 3;
-parameter ED_MAX = 64;
+parameter ED_MAX = 32;
 parameter COUNT_BITS = 32; //longest period is set by number of bits
 parameter ED_BITS = COUNT_BITS + COUNT_BITS + CH_LOG2 + 1;
 localparam CH_MAX = 8'b0000_0001 << CH_LOG2;
 
 // User set parameters (initial state, period in clk cycles, and flip edges)
 reg reset = 1'b0;
-reg [CH_MAX - 1 : 0] state0;
+reg [CH_MAX - 1 : 0] state0 = 1;
 reg signed [COUNT_BITS - 1 : 0] period;
 reg signed [COUNT_BITS - 1 : 0] outer_period = 1;
 reg [ED_BITS - 1 : 0] eds [ED_MAX - 1 : 0];
@@ -53,7 +55,7 @@ generate
 endgenerate 
 
 pulse_logic #(.COUNT_BITS(COUNT_BITS), .CH_LOG2(CH_LOG2), .ED_MAX(ED_MAX)) pulse_logic0 (
-	.reset(reset), // trig | (~PLL_locked)
+	.reset(reset), // trig_in| (~PLL_locked)
 	.clk(pulse_clk), //pulse_clk
 	.period(period),
 	.outer_period(outer_period),
@@ -65,7 +67,9 @@ pulse_logic #(.COUNT_BITS(COUNT_BITS), .CH_LOG2(CH_LOG2), .ED_MAX(ED_MAX)) pulse
 ////////////////////////Processor and UART Module Instantiation///////////////////
 
 // UART transceiver 
-localparam rst = 1'b0;
+reg rst_uart = 1'b0;
+localparam RST_COUNTFROM = 50_000_000; //Reset if haven't heard anything for 1s
+reg [31:0] rst_countdown = RST_COUNTFROM;
 reg transmit;
 reg [7:0] tx_byte;
 wire received;
@@ -76,7 +80,7 @@ wire is_receiving;
 
 uart u0 (
     .clk(sys_clk), // The master clock for this module
-    .rst(rst), // Synchronous reset.
+    .rst(rst_uart), // Synchronous reset.
     .rx(rx), // Incoming serial line
     .tx(tx), // Outgoing serial line
 	 .transmit(transmit), // Signal to transmit
@@ -104,7 +108,7 @@ generate
 	end
 endgenerate 
 
-reg execute; //Goes high when CR, NL is received
+reg execute = 0; //Goes high when CR, NL is received
 
 // Possible commands types (will be indicated in the first received byte)
 localparam STATE0 = 0; 
@@ -119,6 +123,8 @@ localparam SPI2 = 99;
 
 always @(posedge sys_clk) begin
 	if (received) begin
+		rst_countdown <= RST_COUNTFROM;
+		rst_uart <= 0;
 		if (mem[idx - 1] == CR && rx_byte == NL) begin
 			execute <= 1'b1;
 			idx <= 0;
@@ -127,7 +133,17 @@ always @(posedge sys_clk) begin
 			mem[idx] <= rx_byte;
 			idx <= idx + 1;
 		end
-	end 
+	end
+	else if (!(is_receiving | is_transmitting | execute | transmit)) begin
+		if (rst_countdown <= 0) begin
+			rst_uart <= 1;
+			rst_countdown <= RST_COUNTFROM;
+		end
+		else begin
+			rst_countdown <= rst_countdown - 1;
+			rst_uart <= 0;
+		end
+	end
 	if (execute) begin
 		execute <= 1'b0;
 		transmit <= 1'b1; // Notify PC which operation happened
@@ -162,11 +178,20 @@ always @(posedge sys_clk) begin
 		reset <= 1'b0;
 	end
 	
+	if (rst_uart) begin
+		integer j;
+		for (j = 0; j < BYTES; j = j + 1) begin
+			mem[j] <= 0;
+		end
+		idx <= 0;
+		rst_uart <= 0;
+	end
+	
 end
 
 assign debug[0] = is_receiving;
 assign debug[1] = ~execute;
-assign debug[2] = (mem[0] == PER);
+assign debug[2] = rst_uart;
 assign debug[3] = (mem[0] == ED);
 
 endmodule 
