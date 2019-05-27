@@ -2,14 +2,14 @@
 
 module PulseGen_main (
 
-	// Communication and processing clock
+	// Communication and processing clock (50M)
 	input sys_clk,
 
 	// RS232 communication lines
 	input rx,
 	output tx,
 	
-	// Pulse clock input
+	// Pulse clock input (100M)
 	input pulse_base_clk,
 	
 	// User electrical IO
@@ -80,7 +80,7 @@ wire is_receiving;
 
 uart u0 (
     .clk(sys_clk), // The master clock for this module
-    .rst(rst_uart), // Synchronous reset.
+    .rst(0), // Synchronous reset.
     .rx(rx), // Incoming serial line
     .tx(tx), // Outgoing serial line
 	 .transmit(transmit), // Signal to transmit
@@ -96,10 +96,12 @@ uart u0 (
 parameter CR = 8'h0d; //Carriage Return
 parameter NL = 8'h0a; //New line 
 
-// Memory to store memrmation received
+// Memory to store information received
 parameter BYTES = 16; // Maximum command length
-reg [7:0] mem [BYTES - 1:0];
+reg [7:0] mem [BYTES - 1:0]; //Read buffer
 integer idx = 0; //Address
+integer trans_idx = 0;
+reg [7:0] trans_mem [BYTES - 1:0]; //Write buffer
 wire [8 * BYTES - 1 : 0] flat_mem;  
 genvar i;
 generate 
@@ -128,13 +130,19 @@ always @(posedge sys_clk) begin
 		if (mem[idx - 1] == CR && rx_byte == NL) begin
 			execute <= 1'b1;
 			idx <= 0;
+			rst_uart <= 0;
 		end
 		else begin
 			mem[idx] <= rx_byte;
 			idx <= idx + 1;
+			rst_uart <= 0;
+		end
+		if (idx >= BYTES) begin
+			idx <= 0;
+			rst_uart <= 1;
 		end
 	end
-	else if (!(is_receiving | is_transmitting | execute | transmit)) begin
+	else if (!(execute | transmit)) begin
 		if (rst_countdown <= 0) begin
 			rst_uart <= 1;
 			rst_countdown <= RST_COUNTFROM;
@@ -144,9 +152,10 @@ always @(posedge sys_clk) begin
 			rst_uart <= 0;
 		end
 	end
+	
 	if (execute) begin
 		execute <= 1'b0;
-		transmit <= 1'b1; // Notify PC which operation happened
+		transmit <= 1'b1; // Start response to PC
 		tx_byte <= mem[0]; 
 		case (mem[0])
 			STATE0: state0 <= mem[1];
@@ -172,11 +181,13 @@ always @(posedge sys_clk) begin
 				end
 			end
 		endcase
-	end
+	end	
 	else begin
 		transmit <= 1'b0;
 		reset <= 1'b0;
 	end
+	
+	//	if (transmit) 
 	
 	if (rst_uart) begin
 		integer j;
@@ -190,7 +201,7 @@ always @(posedge sys_clk) begin
 end
 
 assign debug[0] = is_receiving;
-assign debug[1] = ~execute;
+assign debug[1] = execute;
 assign debug[2] = rst_uart;
 assign debug[3] = (mem[0] == ED);
 

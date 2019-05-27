@@ -108,10 +108,10 @@ module c10lp_baseline_pinout (
 
 
 //Clocks
-	input			C10_CLK50M,			//3.3V-LVCMOS					FPGA clock
-	input			ENET_CLK_125M,		//LVCMOS - 125MHz				Ethernet clock
+//	input			C10_CLK50M,			//3.3V-LVCMOS					FPGA clock
+//	input			ENET_CLK_125M,		//LVCMOS - 125MHz				Ethernet clock
 	input			HBUS_CLK_50M,		//LVCMOS - 50MHz				HyperRAM clock
-//	input			C10_CLK_ADJ,		//LVCMOS Adjustable				
+	input			C10_CLK_ADJ,		//LVCMOS Adjustable				
 //	input			USB_CLK,				//3.3V-LVCMOS					USB clock
 
 
@@ -125,27 +125,30 @@ wire [31:0] test_per;
 wire [3:0] debug;
 wire pc;
 
-wire [7:0] wvfm;
-
+wire [7:0] wv;
+wire pulse_base;
+assign pulse_base = C10_CLK_ADJ; //100M
 ////////////////////Instantiation of the hardware description for pulse generator////////////
 PulseGen_main main0 (
 	.sys_clk(HBUS_CLK_50M),
-	.rx(GPIO[35]),
-	.tx(GPIO[34]),
-	.pulse_base_clk(ENET_CLK_125M),
-	.trig(GPIO[10]),
-	.wvfm(wvfm),
+	.rx(GPIO[34]),
+	.tx(GPIO[35]),
+	.pulse_base_clk(pulse_base),
+	.trig_in(GPIO[10]),
+	.wvfm(wv),
 	.test_ed(test_ed),
 	.test_per(test_per),
 	.pulse_clk_out(pc),
 	.debug(debug)
 	);
 
+//assign GPIO[35] = GPIO[34];
+	
 reg signed [31:0] n;
 
 always @(posedge pc) begin
-	if (n <= test_per) begin
-		n <= n + 1'b1;
+	if (n <= test_per) begin 
+		n <= n + 1;
 	end 
 	else begin 
 		n <= 0;
@@ -153,14 +156,17 @@ always @(posedge pc) begin
 end
 
 //assign USER_LED[3:0] = wv[3:0];
-assign GPIO[7:0] = wvfm[7:0];
+assign GPIO[7:0] = wv[7:0];
+//assign GPIO[3] = wv[0];
+//assign GPIO[0] = pc;
 
 //assign USER_LED[0] = (n <= test_ed[31:0]);
 //assign USER_LED[2:1] = test_ed[66:65];
-//assign USER_LED[3] = test_ed[67];
-assign USER_LED[3:0] = ~wvfm[3:0];
-//assign USER_LED[1] = debug[1];
-//assign USER_LED[3:2] = debug[3:2];
+assign USER_LED[2] = n > 25_000_000;
+//assign USER_LED[1:0] = ~wv[1:0];
+assign USER_LED[3] = ~debug[1];
+assign USER_LED[0] = ~debug[2];
+
 //assign USER_LED[2] = (test_per == 0);
 
 endmodule
