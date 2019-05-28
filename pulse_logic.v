@@ -3,16 +3,16 @@
 	Edges have following format (MSB to LSB): 
 		1 bit: On/off enable
 		log2(max channels) bits: Channel number 
-		Countbits: Edge value (in clk cycles)
 		Countbits: Change in edge value (in clk cycles)
+		Countbits: Edge value (in clk cycles)
 	Outputs N channel pulse wvfm. 
 	
 	Author  : Matthew Chow
-	Contact : matthewnchow@berkeley.edu
+	email : matthewnchow@berkeley.edu
 	Worked in simulation as of 5/10/2019
 	*/
 	
-module pulse_logic (reset, clk, period, outer_period, state0, eds, state);
+module pulse_logic (reset, clk, period, outer_period, state0, eds, state, trig_out);
 
 	// Can be passed down to modify size of inputs and outputs
 	parameter COUNT_BITS = 32; // Must be >= 1
@@ -31,6 +31,7 @@ module pulse_logic (reset, clk, period, outer_period, state0, eds, state);
 	input				 [7 : 0]		state0;
 	input 			[68*ED_MAX - 1 : 0] 	eds;
 	output 			[7 : 0] 		state;
+	output  							trig_out;
 	
 	// Counter that restarts at period, with outer counter that rolls restarts at big period
 	reg signed [COUNT_BITS - 1 : 0] count = 0; 
@@ -71,5 +72,7 @@ module pulse_logic (reset, clk, period, outer_period, state0, eds, state);
 	wire [CH_MAX - 1 : 0] temp; 
 	nXOR #(.width(CH_MAX), .n(ED_MAX)) nXOR0 (.in(combo), .out(temp));
 	assign  state = state0 ^ temp;
+	
+	assign  trig_out = (outer_count == 0 && count <= 5); //50 ns trig
 	
 endmodule

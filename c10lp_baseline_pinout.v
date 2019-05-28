@@ -135,6 +135,7 @@ PulseGen_main main0 (
 	.tx(GPIO[35]),
 	.pulse_base_clk(pulse_base),
 	.trig_in(GPIO[10]),
+	.trig_out(GPIO[7]),
 	.wvfm(wv),
 	.test_ed(test_ed),
 	.test_per(test_per),
@@ -156,16 +157,20 @@ always @(posedge pc) begin
 end
 
 //assign USER_LED[3:0] = wv[3:0];
-assign GPIO[7:0] = wv[7:0];
+assign GPIO[6:0] = wv[6:0]; //Note that the trigger is on GPIO7
+assign GPIO[8] = wv[7];
+
+assign USER_LED[2:0] = ~debug[2:0];
+assign USER_LED[3] = n <= (test_per / 2);
+
 //assign GPIO[3] = wv[0];
 //assign GPIO[0] = pc;
 
 //assign USER_LED[0] = (n <= test_ed[31:0]);
 //assign USER_LED[2:1] = test_ed[66:65];
-assign USER_LED[2] = n > 25_000_000;
+//assign USER_LED[2] = n > 25_000_000;
 //assign USER_LED[1:0] = ~wv[1:0];
-assign USER_LED[3] = ~debug[1];
-assign USER_LED[0] = ~debug[2];
+//assign USER_LED[0] = ~debug[2];
 
 //assign USER_LED[2] = (test_per == 0);
 

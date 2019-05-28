@@ -14,7 +14,7 @@ module ed_comp(count, outer_count, x, dx, ch_ID, enable, out);
 	input							  		  enable;
 	output 		 [OUT_BITS - 1 : 0] out;
 
-	wire   result = enable & (count >= (x + (dx * outer_count))); 
-	assign out = result << ch_ID;
+	wire result = enable & (count >= (x) + (dx * outer_count)); //
+	assign out = ({{(OUT_BITS - 1){1'b0}},result} << ch_ID);
 
 endmodule 

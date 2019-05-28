@@ -42,7 +42,7 @@ parameter ED_BITS = COUNT_BITS + COUNT_BITS + CH_LOG2 + 1;
 localparam CH_MAX = 8'b0000_0001 << CH_LOG2;
 
 // User set parameters (initial state, period in clk cycles, and flip edges)
-reg reset = 1'b0;
+reg soft_trig = 1'b0; 
 reg [CH_MAX - 1 : 0] state0 = 0;
 reg signed [COUNT_BITS - 1 : 0] period;
 reg signed [COUNT_BITS - 1 : 0] outer_period = 1;
@@ -56,7 +56,7 @@ generate
 endgenerate 
 
 pulse_logic #(.COUNT_BITS(COUNT_BITS), .CH_LOG2(CH_LOG2), .ED_MAX(ED_MAX)) pulse_logic0 (
-	.reset(reset), // trig_in| (~PLL_locked)
+	.reset(soft_trig), // | trig_in | (~PLL_locked)
 	.clk(pulse_clk), //pulse_clk
 	.period(period),
 	.outer_period(outer_period),
@@ -121,6 +121,7 @@ localparam OUTER_PER = 3;
 localparam ED = 4; 
 localparam CLEAR = 5;
 localparam PRINT = 6;
+localparam SOFT_TRIG = 7;
 
 localparam SPI1 = 98;
 localparam SPI2 = 99;
@@ -167,7 +168,6 @@ always @(posedge sys_clk) begin
 			ED: begin //mem[1] contains edge number (limited to 255 edges)
 				eds[mem[1]] <= flat_mem[ED_BITS - 1 + 16 : 16];
 				test_ed <= flat_mem[ED_BITS+15:16];
-				reset <= 1'b1;
 			end
 			OUTER_PER: begin
 				outer_period <= flat_mem[COUNT_BITS - 1 + 8 : 8];
@@ -181,11 +181,15 @@ always @(posedge sys_clk) begin
 					eds[k] <= 0;
 				end
 			end
+			SOFT_TRIG: begin
+				soft_trig <= 1'b1;
+			end
 		endcase
+		if (mem[0] != SOFT_TRIG) soft_trig <= 1'b0;
 	end	
 	else begin
 		transmit <= 1'b0;
-		reset <= 1'b0;
+		soft_trig <= 1'b0;
 	end
 	
 	//	if (transmit) 
