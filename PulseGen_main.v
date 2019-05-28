@@ -14,6 +14,7 @@ module PulseGen_main (
 	
 	// User electrical IO
 	input trig_in,
+	output trig_out,
 	output [CH_MAX - 1 : 0] wvfm,
 	
 	output reg [67:0] test_ed,
@@ -42,7 +43,7 @@ localparam CH_MAX = 8'b0000_0001 << CH_LOG2;
 
 // User set parameters (initial state, period in clk cycles, and flip edges)
 reg reset = 1'b0;
-reg [CH_MAX - 1 : 0] state0 = 1;
+reg [CH_MAX - 1 : 0] state0 = 0;
 reg signed [COUNT_BITS - 1 : 0] period;
 reg signed [COUNT_BITS - 1 : 0] outer_period = 1;
 reg [ED_BITS - 1 : 0] eds [ED_MAX - 1 : 0];
@@ -61,7 +62,8 @@ pulse_logic #(.COUNT_BITS(COUNT_BITS), .CH_LOG2(CH_LOG2), .ED_MAX(ED_MAX)) pulse
 	.outer_period(outer_period),
 	.state0(state0),
 	.eds(flat_eds),
-	.state(wvfm)
+	.state(wvfm),
+	.trig_out(trig_out)
 );
 
 ////////////////////////Processor and UART Module Instantiation///////////////////
@@ -80,7 +82,7 @@ wire is_receiving;
 
 uart u0 (
     .clk(sys_clk), // The master clock for this module
-    .rst(0), // Synchronous reset.
+    .rst(rst_uart), // Synchronous reset.
     .rx(rx), // Incoming serial line
     .tx(tx), // Outgoing serial line
 	 .transmit(transmit), // Signal to transmit
@@ -113,12 +115,12 @@ endgenerate
 reg execute = 0; //Goes high when CR, NL is received
 
 // Possible commands types (will be indicated in the first received byte)
-localparam STATE0 = 0; 
-localparam PER = 1; 
-localparam ED = 2; 
+localparam STATE0 = 1;  //Don't use 0!
+localparam PER = 2; 
 localparam OUTER_PER = 3;
-localparam PRINT = 4;
+localparam ED = 4; 
 localparam CLEAR = 5;
+localparam PRINT = 6;
 
 localparam SPI1 = 98;
 localparam SPI2 = 99;
@@ -126,26 +128,25 @@ localparam SPI2 = 99;
 always @(posedge sys_clk) begin
 	if (received) begin
 		rst_countdown <= RST_COUNTFROM;
-		rst_uart <= 0;
 		if (mem[idx - 1] == CR && rx_byte == NL) begin
 			execute <= 1'b1;
 			idx <= 0;
-			rst_uart <= 0;
 		end
 		else begin
 			mem[idx] <= rx_byte;
 			idx <= idx + 1;
-			rst_uart <= 0;
 		end
 		if (idx >= BYTES) begin
 			idx <= 0;
 			rst_uart <= 1;
 		end
+		else rst_uart <= 0;
 	end
 	else if (!(execute | transmit)) begin
 		if (rst_countdown <= 0) begin
 			rst_uart <= 1;
 			rst_countdown <= RST_COUNTFROM;
+			idx <= 0;
 		end
 		else begin
 			rst_countdown <= rst_countdown - 1;
@@ -200,10 +201,11 @@ always @(posedge sys_clk) begin
 	
 end
 
-assign debug[0] = is_receiving;
-assign debug[1] = execute;
-assign debug[2] = rst_uart;
-assign debug[3] = (mem[0] == ED);
+assign debug[2:0] = state0[2:0];
+//assign debug[0] = is_receiving;
+//assign debug[1] = execute;
+//assign debug[2] = rst_uart;
+//assign debug[3] = (mem[0] == ED);
 
 endmodule 
 
